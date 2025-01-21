@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>About the Developer</title>
+    <link rel="stylesheet" href="assets/css/styles.css">
+    <script src="assets/js/main.js" defer></script>
+    <style>
+        body {
+            background-color: black;
+            color: white;
+            font-family: 'Press Start 2P', sans-serif;
+            text-align: center;
+            padding-top: 50px;
+            overflow: hidden; /* Prevent scrolling */
+        }
+        h1, h2, p {
+            font-family: 'Press Start 2P', sans-serif; /* Ensure pixelated font */
+            position: relative;
+            display: inline-block;
+        }
+        h1:hover, h2:hover, p:hover {
+            color: white; /* Ensure text does not turn red on hover */
+        }
+        .navbar {
+            position: fixed;
+            top: 0;
+            left: -200px; /* Start off-screen */
+            width: 200px;
+            height: 100%;
+            background-color: black; /* Black background */
+            border-right: 2px solid grey; /* Grey border */
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding-top: 20px;
+            transition: left 0.3s;
+            z-index: 1001; /* Ensure navbar is on top */
+            font-family: 'Press Start 2P', sans-serif; /* Ensure the navbar has the same font as the home page */
+        }
+        .navbar.open {
+            left: 0; /* Slide in */
+        }
+        .navbar a {
+            color: white;
+            text-decoration: none;
+            margin: 10px 0;
+            font-family: 'Press Start 2P', sans-serif;
+            text-align: center;
+            transition: transform 0.3s ease, color 0.3s ease, text-shadow 0.3s ease;
+        }
+        .navbar a:hover {
+            transform: scale(1.2);
+            color: red;
+            text-shadow: 2px 2px 5px rgba(0, 0, 0, 0.5); /* Add shadow effect */
+        }
+        #nav-toggle {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 50px;
+            height: 100%;
+            background-color: black;
+            border-right: 2px solid grey;
+            z-index: 1002; /* Ensure toggle tab is on top */
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: left 0.3s;
+        }
+        #nav-toggle.open {
+            left: 200px; /* Move out with the navbar */
+        }
+        .content {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            text-align: center; /* Center text */
+            background-color: rgba(0, 0, 0, 0.8); /* Semi-transparent background */
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
+        }
+        .interactive-bg {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -1;
+            overflow: hidden;
+        }
+        .interactive-bg canvas {
+            width: 100%;
+            height: 100%;
+        }
+        .bio-image {
+            display: block;
+            margin: 0 auto 20px;
+            border-radius: 50%;
+            width: 150px;
+            height: 150px;
+            object-fit: cover;
+        }
+    </style>
+    <script>
+        // Check if the audio element already exists
+        if (!document.getElementById('background-music')) {
+            const audio = document.createElement('audio');
+            audio.id = 'background-music';
+            audio.src = 'assets/sounds/soundtrack.mp3';
+            audio.loop = true;
+            audio.autoplay = true;
+            document.body.appendChild(audio);
+        } else {
+            const audio = document.getElementById('background-music');
+            audio.play().catch(error => {
+                console.log('Autoplay prevented:', error);
+            });
+        }
+    </script>
+</head>
+<body>
+    <div id="nav-toggle">☰</div>
+    <div class="navbar" id="navbar">
+        <a href="index.html">Home Page</a>
+        <a href="features.html">Upcoming Features</a>
+        <a href="contact.html">Contact Us</a>
+        <a href="download.html">Download</a>
+        <a href="reviews.html">Reviews</a>
+        <a href="developer.html">The Developer</a>
+    </div>
+    <div class="interactive-bg">
+        <canvas id="backgroundCanvas"></canvas>
+    </div>
+    <main>
+        <h1>About the Developer</h1>
+        <section class="content">
+            <h2>Developer Bio</h2>
+            <p>Hello! My name is Nick Hood, and I am the developer of this game. This project was created as part of my Grade 12 college computer programming course. Throughout the development process, I applied various programming concepts and techniques that I learned during the course. This project not only helped me enhance my coding skills but also allowed me to explore game development, which is a field I am passionate about.</p>
+            <p>I hope you enjoy playing the game as much as I enjoyed creating it. Thank you for visiting!</p>
+        </section>
+    </main>
+    <audio id="background-music" src="assets/sounds/soundtrack.mp3" loop></audio>
+    <script>
+        const navToggleButton = document.getElementById('nav-toggle');
+        const navbar = document.getElementById('navbar');
+        navToggleButton.addEventListener('click', () => {
+            navbar.classList.toggle('open');
+            navToggleButton.classList.toggle('open');
+        });
+
+        // Interactive background
+        const canvas = document.getElementById('backgroundCanvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+
+        const particles = [];
+        const colors = ['#ff0000', '#00ff00', '#0000ff', '#ffff00', '#ff00ff', '#00ffff'];
+
+        class Particle {
+            constructor(x, y, dx, dy, radius, color) {
+                this.x = x;
+                this.y = y;
+                this.dx = dx;
+                this.dy = dy;
+                this.radius = radius;
+                this.color = color;
+            }
+
+            draw() {
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2, false);
+                ctx.fillStyle = this.color;
+                ctx.fill();
+                ctx.closePath();
+            }
+
+            update() {
+                if (this.x + this.radius > canvas.width || this.x - this.radius < 0) {
+                    this.dx = -this.dx;
+                }
+                if (this.y + this.radius > canvas.height || this.y - this.radius < 0) {
+                    this.dy = -this.dy;
+                }
+                this.x += this.dx;
+                this.y += this.dy;
+                this.draw();
+            }
+        }
+
+        function init() {
+            for (let i = 0; i < 100; i++) {
+                const radius = Math.random() * 3 + 1;
+                const x = Math.random() * (canvas.width - radius * 2) + radius;
+                const y = Math.random() * (canvas.height - radius * 2) + radius;
+                const dx = (Math.random() - 0.5) * 2;
+                const dy = (Math.random() - 0.5) * 2;
+                const color = colors[Math.floor(Math.random() * colors.length)];
+                particles.push(new Particle(x, y, dx, dy, radius, color));
+            }
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            particles.forEach(particle => particle.update());
+        }
+
+        init();
+        animate();
+    </script>
+</body>
+</html>

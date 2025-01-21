@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Contact Us - Zombie Hunter</title>
+    <link rel="stylesheet" href="assets/css/styles.css">
+    <script src="assets/js/main.js" defer></script>
+    <style>
+        body {
+            background-color: black;
+            color: white;
+            font-family: 'Press Start 2P', sans-serif;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            text-align: center;
+        }
+        h1 {
+            font-size: 3em;
+            margin-bottom: 20px;
+        }
+        form {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        input, textarea {
+            width: 80%;
+            padding: 10px;
+            margin: 10px 0;
+            font-size: 1em;
+        }
+        button {
+            padding: 10px 20px;
+            font-size: 1em;
+            cursor: pointer;
+            background-color: #444;
+            color: white;
+            border: none;
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            background-color: #666;
+        }
+        .social-links a {
+            margin: 0 10px;
+            font-size: 1.5em;
+            color: white;
+            text-decoration: none;
+        }
+        .back-button {
+            margin-top: 20px;
+            background-color: #444;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        .back-button:hover {
+            background-color: #666;
+        }
+        .navbar {
+            position: fixed;
+            top: 0;
+            left: -200px; /* Start off-screen */
+            width: 200px;
+            height: 100%;
+            background-color: black; /* Black background */
+            border-right: 2px solid grey; /* Grey border */
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding-top: 20px;
+            transition: left 0.3s;
+            z-index: 1001; /* Ensure navbar is on top */
+            font-family: 'Press Start 2P', sans-serif; /* Ensure the navbar has the same font as the home page */
+        }
+        .navbar.open {
+            left: 0; /* Slide in */
+        }
+        .navbar a {
+            color: white;
+            text-decoration: none;
+            margin: 10px 0;
+            font-family: 'Press Start 2P', sans-serif;
+            text-align: center; /* Center the text */
+            transition: transform 0.3s ease, color 0.3s ease, text-shadow 0.3s ease;
+        }
+        .navbar a:hover {
+            transform: scale(1.2);
+            color: red; /* Fully red color */
+            text-shadow: 2px 2px 5px rgba(0, 0, 0, 0.5); /* Add shadow effect */
+        }
+        #nav-toggle {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 50px;
+            height: 100%;
+            background-color: black;
+            border-right: 2px solid grey;
+            z-index: 1002; /* Ensure toggle tab is on top */
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: left 0.3s;
+        }
+        #nav-toggle.open {
+            left: 200px; /* Move out with the navbar */
+        }
+    </style>
+    <script>
+        // Check if the audio element already exists
+        if (!document.getElementById('background-music')) {
+            const audio = document.createElement('audio');
+            audio.id = 'background-music';
+            audio.src = 'assets/sounds/soundtrack.mp3';
+            audio.loop = true;
+            audio.autoplay = true;
+            document.body.appendChild(audio);
+        } else {
+            const audio = document.getElementById('background-music');
+            audio.play().catch(error => {
+                console.log('Autoplay prevented:', error);
+            });
+        }
+    </script>
+</head>
+<body>
+    <div id="nav-toggle">☰</div>
+    <div class="navbar" id="navbar">
+        <a href="index.html">Home Page</a>
+        <a href="features.html">Upcoming Features</a>
+        <a href="contact.html">Contact Us</a>
+        <a href="download.html">Download</a>
+        <a href="reviews.html">Reviews</a>
+        <a href="developer.html">The Developer</a>
+    </div>
+    <div class="container">
+        <h1>Contact Us</h1>
+        <form id="contactForm">
+            <input type="text" name="name" placeholder="Your Name" required>
+            <input type="email" name="email" placeholder="Your Email" required>
+            <textarea name="message" rows="5" placeholder="Your Message" required></textarea>
+            <button type="submit">Send</button>
+        </form>
+    </div>
+    <audio id="background-music" src="assets/sounds/soundtrack.mp3" loop></audio>
+    <script>
+        const navToggleButton = document.getElementById('nav-toggle');
+        const navbar = document.getElementById('navbar');
+        navToggleButton.addEventListener('click', () => {
+            navbar.classList.toggle('open');
+            navToggleButton.classList.toggle('open');
+        });
+
+        document.getElementById('contactForm').addEventListener('submit', function(event) {
+            event.preventDefault();
+            
+            const formData = new FormData(this);
+            const name = formData.get('name');
+            const email = formData.get('email');
+            const message = formData.get('message');
+
+            const mailtoLink = `mailto:nickh77@kprschools.ca?subject=Contact%20Form%20Submission&body=Name:%20${name}%0AEmail:%20${email}%0AMessage:%20${message}`;
+            window.location.href = mailtoLink;
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,783 @@
+
+
+
+
+
+
+
+
+*******************************************
+
+import pygame
+import random
+import math
+import time
+
+
+# Blood Splatter Particle System
+class BloodSplatter:
+    def __init__(self, x, y, angle):
+        self.x = x
+        self.y = y
+        self.angle = angle
+        self.speed = random.uniform(1.5, 3)  # Reduced speed for a more controlled movement
+        self.lifetime = random.uniform(0.3, 1)  # Shorter lifetime
+        self.timer = 0
+        self.size = random.randint(3, 5)  # Smaller size for 8-bit look
+
+    def update(self):
+        # Update the position of the blood splatter with a more controlled speed
+        self.x += self.speed * math.cos(self.angle)
+        self.y += self.speed * math.sin(self.angle)
+
+        # Increase the timer to manage particle lifetime
+        self.timer += 0.05
+        if self.timer >= self.lifetime:
+            return True  # Particle should be removed
+        return False
+
+    def draw(self, camera_x, camera_y):
+        # Draw the blood splatter as a small, pixelated square or circle
+        # Pixelated 8-bit style: Using a small block shape (square) instead of a smooth circle
+        pygame.draw.rect(screen, RED, (int(self.x - camera_x), int(self.y - camera_y), self.size, self.size))
+
+
+class Grenade:
+    def __init__(self, x, y, timer=2):
+        self.x = x
+        self.y = y
+        self.timer = timer  # Countdown timer for grenade to explode
+        self.image = pygame.image.load("grenade.png").convert_alpha()
+        self.image = pygame.transform.scale(self.image, (30, 30))  # Resize grenade image to be smaller
+        self.rect = self.image.get_rect(center=(x, y))
+        self.exploded = False
+        self.blast_radius = 100  # Explosion radius for damaging zombies
+
+    def update(self, zombies):
+        # Update the timer
+        if not self.exploded:
+            self.timer -= 1 / 60  # Decrease the timer based on frame rate
+            if self.timer <= 0:
+                self.explode(zombies)
+
+    def explode(self, zombies):
+        self.exploded = True
+        # Check for zombies within the blast radius and instantly kill them
+        for zombie in zombies[:]:
+            if math.hypot(zombie.x - self.x, zombie.y - self.y) < self.blast_radius:
+                # Instant death for zombies in the blast radius
+                zombies.remove(zombie)
+                global score
+                score += 10  # Add points for killing a zombie with a grenade
+
+                # Create blood splatter particles at the zombie's position
+                for _ in range(10):  # Create 10 blood splatter particles
+                    angle = random.uniform(0, 2 * math.pi)  # Random direction for each particle
+                    blood_splatter_particles.append(BloodSplatter(zombie.x, zombie.y, angle))
+
+    def draw(self, camera_x, camera_y):
+        # Draw grenade image
+        screen.blit(self.image, (self.x - camera_x - self.rect.width // 2, self.y - camera_y - self.rect.height // 2))
+
+        # Draw the timer above the grenade
+        if not self.exploded:
+            font = pygame.font.Font("pixelfont.ttf", 30)
+            timer_text = font.render(f"{int(self.timer)}", True, (255, 0, 0))
+            screen.blit(timer_text, (
+                self.x - camera_x - timer_text.get_width() // 2, self.y - camera_y - self.rect.height // 2 - 20))
+
+
+# Initialize the blood splatter particles list
+blood_splatter_particles = []  # List to store active blood splatter particles
+
+pygame.init()
+
+# Screen and game constants
+width, height = 800, 600
+screen = pygame.display.set_mode((width, height), pygame.RESIZABLE)
+pygame.display.set_caption("Zombie Hunter")
+
+# Colors and fonts
+BLACK, GREEN, RED, WHITE, BLUE, DARK_GRAY = (0, 0, 0), (0, 255, 0), (255, 0, 0), (255, 255, 255), (0, 0, 255), (
+50, 50, 50)
+font = pygame.font.Font("pixelfont.ttf", 24)
+
+# Clock and game variables
+clock = pygame.time.Clock()
+
+# Power-up timers (dictionary to manage multiple power-ups)
+active_powerup_timers = {
+    "insta_kill": 0,
+    "double_points": 0,
+    "freeze": 0,
+    "infinite_ammo": 0,
+}
+
+player_speed, player_x, player_y = 1.9, 400, 300
+health, shield, score, round_num = 100, 0, 0, 1
+stamina, max_stamina = 100, 100  # Stamina system
+zombies, bullets, active_powerups = [], [], []
+gun_type, gun_price = "pistol", {"ak": 100, "revolver": 75, "p90": 90, "rocket_launcher": 150, "shotgun": 50,
+                                 "uzi": 60}  # Updated gun prices
+ammo, current_ammo, reload_time, reloading, reload_start_time = {"pistol": 6, "ak": 30, "revolver": 6, "p90": 50,
+                                                                 "rocket_launcher": 1, "shotgun": 6,
+                                                                 "uzi": 25}, 6, 1.5, False, 0
+map_width, map_height = 2144, 896
+weapon_damage = {"pistol": 1, "ak": 2, "revolver": 3, "p90": 1, "rocket_launcher": 5, "shotgun": 2,
+                 "uzi": 1}  # Updated weapon damage
+fire_rate = {"pistol": 0.5, "ak": 0.1, "revolver": 0.6, "p90": 0.05, "rocket_launcher": 1, "shotgun": 0.8,
+             "uzi": 0.1}  # Fire rate for each gun
+last_shot_time = 0  # Track the last shot time
+
+# Power-up timers
+insta_kill_active, double_points_active, freeze_active, infinite_ammo_active = False, False, False, False
+insta_kill_end_time, double_points_end_time, freeze_end_time, infinite_ammo_end_time = 0, 0, 0, 0
+
+# Images (scaled down)
+background_image = pygame.image.load("ground.png")
+background_image = pygame.transform.scale(background_image, (map_width * 2.3, map_height * 2.3))
+player_stand_image = pygame.image.load("hitman1_gun.png")
+player_gun_image = pygame.image.load("hitman1_gun.png")
+player_machine_image = pygame.image.load("hitman1_machine.png")
+player_reload_image = pygame.image.load("hitman1_reload.png")
+player_image = player_stand_image
+zombie_image = pygame.image.load("zombie.png")
+zombie_image = pygame.transform.scale(zombie_image, (30, 30))  # Smaller zombie image
+powerup_images = {
+    "insta_kill": pygame.transform.scale(pygame.image.load("instant_kill.png"), (60, 45)),  # Increased size
+    "double_points": pygame.transform.scale(pygame.image.load("2x.png"), (60, 45)),  # Increased size
+    "freeze": pygame.transform.scale(pygame.image.load("freeze.png"), (60, 45)),  # Increased size
+    "infinite_ammo": pygame.transform.scale(pygame.image.load("infinite_ammo.png"), (60, 45))  # Increased size
+}
+gun_images = {gun: pygame.transform.scale(pygame.image.load(f"{gun}.png"), (80, 80)) for gun in
+              gun_price}  # Adjusted gun image size
+shield_image = pygame.image.load("shield.png")
+shield_image = pygame.transform.scale(shield_image, (80, 80))
+grenade_image = pygame.image.load("grenade.png")
+grenade_image = pygame.transform.scale(grenade_image, (80, 80))
+
+
+# Buy Menu
+def draw_buy_menu():
+    overlay = pygame.Surface((width, height), pygame.SRCALPHA)
+    overlay.fill((0, 0, 0, 180))  # Semi-transparent overlay
+    screen.blit(overlay, (0, 0))
+
+    # Draw title
+    title_text = font.render("Buy Menu", True, WHITE)
+    screen.blit(title_text, (width // 2 - title_text.get_width() // 2, 20))
+
+    # Draw items
+    items = [
+        ("AK", gun_images["ak"], gun_price["ak"]),
+        ("Revolver", gun_images["revolver"], gun_price["revolver"]),
+        ("P90", gun_images["p90"], gun_price["p90"]),
+        ("Rocket Launcher", gun_images["rocket_launcher"], gun_price["rocket_launcher"]),
+        ("Shotgun", gun_images["shotgun"], gun_price["shotgun"]),
+        ("Uzi", gun_images["uzi"], gun_price["uzi"]),
+        ("Shield", shield_image, 125),
+        ("Grenade", grenade_image, 50),
+        ("Insta Kill", powerup_images["insta_kill"], 200),
+        ("Double Points", powerup_images["double_points"], 150),
+        ("Freeze", powerup_images["freeze"], 100),
+        ("Infinite Ammo", powerup_images["infinite_ammo"], 250)
+    ]
+
+    mouse_x, mouse_y = pygame.mouse.get_pos()
+    for idx, (name, image, price) in enumerate(items):
+        x, y = 100 + (idx % 4) * 150, 100 + (idx // 4) * 150
+        rect = pygame.Rect(x, y, 100, 100)
+        if rect.collidepoint(mouse_x, mouse_y):
+            pygame.draw.rect(screen, WHITE, rect, 3)  # Highlight with white border
+            price_text = font.render(f"{name} ${price}", True, WHITE)
+            screen.blit(image, (x + 10, y + 10))
+            screen.blit(price_text, (x + 10, y + 110))  # Draw text below the image
+        else:
+            pygame.draw.rect(screen, BLACK, rect, border_radius=5)
+            screen.blit(image, (x + 10, y + 10))
+
+
+def handle_buy_click(pos):
+    global gun_type, score, shield, grenade_ammo
+    items = [
+        ("AK", gun_price["ak"]),
+        ("Revolver", gun_price["revolver"]),
+        ("P90", gun_price["p90"]),
+        ("Rocket Launcher", gun_price["rocket_launcher"]),
+        ("Shotgun", gun_price["shotgun"]),
+        ("Uzi", gun_price["uzi"]),
+        ("Shield", 125),
+        ("Grenade", 50),
+        ("Insta Kill", 200),
+        ("Double Points", 150),
+        ("Freeze", 100),
+        ("Infinite Ammo", 250)
+    ]
+
+    for idx, (name, price) in enumerate(items):
+        x, y = 100 + (idx % 4) * 150, 100 + (idx // 4) * 150
+        if x < pos[0] < x + 100 and y < pos[1] < y + 100:
+            if score >= price:
+                if name in gun_price:
+                    gun_type = name.lower()
+                elif name == "Shield":
+                    shield = min(100, shield + 50)
+                elif name == "Grenade":
+                    grenade_ammo += 1
+                elif name == "Insta Kill":
+                    active_powerup_timers["insta_kill"] = time.time() + 24
+                elif name == "Double Points":
+                    active_powerup_timers["double_points"] = time.time() + 24
+                elif name == "Freeze":
+                    active_powerup_timers["freeze"] = time.time() + 24
+                elif name == "Infinite Ammo":
+                    active_powerup_timers["infinite_ammo"] = time.time() + 24
+                score -= price
+            else:
+                if name in gun_price:
+                    gun_type = name.lower()
+                elif name == "Shield":
+                    shield = min(100, shield + 50)
+                elif name == "Grenade":
+                    grenade_ammo += 1
+                elif name == "Insta Kill":
+                    active_powerup_timers["insta_kill"] = time.time() + 24
+                elif name == "Double Points":
+                    active_powerup_timers["double_points"] = time.time() + 24
+                elif name == "Freeze":
+                    active_powerup_timers["freeze"] = time.time() + 24
+                elif name == "Infinite Ammo":
+                    active_powerup_timers["infinite_ammo"] = time.time() + 24
+
+
+# Classes
+class Zombie:
+    def __init__(self, x, y, speed, health):
+        self.x, self.y, self.speed, self.health, self.max_health = x, y, speed, health, health
+
+    def move_towards_player(self, player_x, player_y):
+        if freeze_active:
+            return 0
+        angle = math.atan2(player_y - self.y, player_x - self.x)
+        self.x += self.speed * math.cos(angle)
+        self.y += self.speed * math.sin(angle)
+        return angle
+
+    def draw(self, camera_x, camera_y, angle):
+        # Draw the zombie image
+        scaled_x, scaled_y = self.x - camera_x, self.y - camera_y
+        rotated_zombie = pygame.transform.rotate(zombie_image, -math.degrees(angle))
+        zombie_rect = rotated_zombie.get_rect(center=(scaled_x, scaled_y))
+        screen.blit(rotated_zombie, zombie_rect.topleft)
+
+        # Draw health bar above the zombie
+        self.draw_health_bar(camera_x, camera_y)
+
+        # Highlight frozen zombies in blue
+        if freeze_active:
+            blue_overlay = pygame.Surface(rotated_zombie.get_size(), pygame.SRCALPHA)
+            blue_overlay.fill((0, 0, 255, 100))  # Semi-transparent blue overlay
+            screen.blit(blue_overlay, zombie_rect.topleft)
+
+    def draw_health_bar(self, camera_x, camera_y):
+        # Dimensions for the health bar
+        bar_width = 30  # Width of the health bar
+        bar_height = 5  # Height of the health bar
+        border_thickness = 2  # Thickness of the border
+        health_percentage = self.health / self.max_health  # Calculate percentage of health left
+
+        # Calculate positions
+        health_bar_x = self.x - camera_x - bar_width // 2
+        health_bar_y = self.y - camera_y - 20  # Position above the zombie
+        health_bar_width = int(bar_width * health_percentage)
+
+        # Draw the border (white rectangle)
+        pygame.draw.rect(
+            screen,
+            (255, 255, 255),  # White color for the border
+            (health_bar_x - border_thickness, health_bar_y - border_thickness,
+             bar_width + 2 * border_thickness, bar_height + 2 * border_thickness)
+        )
+
+        # Draw the background of the health bar (gray)
+        pygame.draw.rect(
+            screen,
+            (50, 50, 50),  # Gray color for the background
+            (health_bar_x, health_bar_y, bar_width, bar_height)
+        )
+
+        # Draw the foreground of the health bar (green)
+        pygame.draw.rect(
+            screen,
+            (0, 255, 0),  # Green color for the health
+            (health_bar_x, health_bar_y, health_bar_width, bar_height)
+        )
+
+
+class Bullet:
+    def __init__(self, x, y, angle):
+        self.x, self.y, self.angle, self.speed = x, y, angle, 10
+
+    def move(self):
+        self.x += self.speed * math.cos(self.angle)
+        self.y += self.speed * math.sin(self.angle)
+
+    def draw(self, camera_x, camera_y):
+        scaled_x, scaled_y = self.x - camera_x, self.y - camera_y
+        pygame.draw.circle(screen, GREEN, (int(scaled_x), int(scaled_y)), 5)
+
+
+class PowerUp:
+    def __init__(self, x, y, type):
+        self.x, self.y, self.type = x, y, type
+
+    def draw(self, camera_x, camera_y):
+        scaled_x, scaled_y = self.x - camera_x, self.y - camera_y
+        screen.blit(powerup_images[self.type], (scaled_x, scaled_y))
+
+
+# Helper Functions
+def spawn_powerup_at_zombie(zombie_x, zombie_y):
+    if random.random() < 0.99:  # 5% chance of dropping a power-up
+        powerup_type = random.choice(["insta_kill", "double_points", "freeze", "infinite_ammo"])
+        active_powerups.append(PowerUp(zombie_x, zombie_y, powerup_type))
+
+
+def shoot_bullet(player_x, player_y, mouse_x, mouse_y):
+    global current_ammo, reloading, last_shot_time
+    current_time = time.time()
+    if not reloading and (current_ammo > 0 or infinite_ammo_active) and current_time - last_shot_time >= fire_rate[
+        gun_type]:
+        angle = math.atan2(mouse_y - height // 2, mouse_x - width // 2)
+        last_shot_time = current_time
+
+        # Handle different guns
+        if gun_type == "shotgun":
+            for offset in [-0.1, 0, 0.1]:
+                bullets.append(Bullet(player_x, player_y, angle + offset))
+            if not infinite_ammo_active:
+                current_ammo -= 1  # Decrease ammo for shotgun
+        elif gun_type == "rocket_launcher":
+            bullets.append(Bullet(player_x, player_y, angle))
+            if not infinite_ammo_active:
+                current_ammo -= 1  # Decrease ammo for rocket launcher
+        elif gun_type in ["pistol", "ak", "revolver", "p90", "uzi"]:
+            bullets.append(Bullet(player_x, player_y, angle))
+            if not infinite_ammo_active:
+                current_ammo -= 1  # Decrease ammo for pistol, ak, revolver, p90, and uzi
+
+
+# In the game loop, modify the shooting behavior for uzi to be automatic
+if gun_type == "uzi":
+    if pygame.mouse.get_pressed()[0]:  # Hold left mouse button to shoot automatically with uzi
+        shoot_bullet(player_x, player_y, *pygame.mouse.get_pos())
+
+
+def draw_flashlight(camera_x, camera_y):
+    overlay = pygame.Surface((width, height), pygame.SRCALPHA)
+    overlay.fill((0, 0, 0, 240))
+    flashlight_radius = 200
+    flashlight_x, flashlight_y = player_x - camera_x, player_y - camera_y
+    pygame.draw.circle(overlay, (0, 0, 0, 0), (int(flashlight_x), int(flashlight_y)), flashlight_radius)
+    screen.blit(overlay, (0, 0))
+
+
+def spawn_zombies(round_num):
+    base_zombies = 5 + min(round_num - 1, 5)
+    additional_zombies = max(0, round_num - 5) * 3  # Increase spawn rate
+    zombie_count = base_zombies + additional_zombies
+
+    # Incremental difficulty based on round number
+    zombie_health = 3 + round_num // 2  # Increase zombie health slightly each round
+    zombie_speed = 1 + round_num * 0.1  # Increase zombie speed slightly each round
+
+    return [
+        Zombie(
+            random.choice([random.randint(0, 100), random.randint(map_width - 100, map_width)]),
+            random.choice([random.randint(0, 100), random.randint(map_height - 100, map_height)]),
+            zombie_speed,
+            zombie_health,
+        )
+        for _ in range(zombie_count)
+    ]
+
+
+def apply_powerups():
+    global weapon_damage, double_points_active, freeze_active, infinite_ammo_active
+    current_time = time.time()
+
+    # Insta-kill logic
+    if active_powerup_timers["insta_kill"] > current_time:
+        weapon_damage = {key: 999 for key in weapon_damage}  # Set all weapon damage to max
+    else:
+        weapon_damage = {"pistol": 1, "ak": 2, "revolver": 3, "p90": 1, "rocket_launcher": 5, "shotgun": 2, "uzi": 1}
+
+    # Double points logic
+    double_points_active = active_powerup_timers["double_points"] > current_time
+
+    # Freeze logic
+    freeze_active = active_powerup_timers["freeze"] > current_time
+
+    # Infinite ammo logic
+    infinite_ammo_active = active_powerup_timers["infinite_ammo"] > current_time
+
+
+def draw_hud():
+    # Health bar dimensions and position
+    health_bar_width = 200
+    health_bar_height = 20
+    border_thickness = 3
+    health_ratio = health / 100
+
+    # Draw health bar
+    pygame.draw.rect(screen, WHITE, (
+        10 - border_thickness, 10 - border_thickness, health_bar_width + 2 * border_thickness,
+        health_bar_height + 2 * border_thickness))
+    pygame.draw.rect(screen, RED, (10, 10, health_bar_width, health_bar_height))
+    pygame.draw.rect(screen, GREEN, (10, 10, health_bar_width * health_ratio, health_bar_height))
+
+    # Draw shield bar
+    shield_bar_width = 200
+    shield_bar_height = 20
+    shield_ratio = shield / 100
+
+    # Draw shield bar
+    pygame.draw.rect(screen, WHITE, (
+        10 - border_thickness, 40 - border_thickness, shield_bar_width + 2 * border_thickness,
+        shield_bar_height + 2 * border_thickness))
+    pygame.draw.rect(screen, (50, 50, 50),
+                     (10, 40, shield_bar_width, shield_bar_height))  # Grey background for shield bar
+    pygame.draw.rect(screen, BLUE, (10, 40, shield_bar_width * shield_ratio, shield_bar_height))
+
+    # Draw stamina bar
+    stamina_bar_width = 200
+    stamina_bar_height = 20
+    stamina_ratio = stamina / max_stamina
+
+    # Draw stamina bar
+    pygame.draw.rect(screen, WHITE, (
+        10 - border_thickness, 70 - border_thickness, stamina_bar_width + 2 * border_thickness,
+        stamina_bar_height + 2 * border_thickness))
+    pygame.draw.rect(screen, (50, 50, 50),
+                     (10, 70, stamina_bar_width, stamina_bar_height))  # Grey background for stamina bar
+    pygame.draw.rect(screen, GREEN, (10, 70, stamina_bar_width * stamina_ratio, stamina_bar_height))
+
+    # Draw round number
+    round_text = font.render(f"Wave: {round_num}", True, WHITE)
+    screen.blit(round_text, (10, height - 40))
+
+    # Draw score
+    score_text = font.render(f"Score: {score}", True, WHITE)
+    screen.blit(score_text, (width - 150, height - 40))
+
+    # Draw gun type and ammo
+    gun_text = font.render(f"Gun: {gun_type.capitalize()}", True, WHITE)
+    screen.blit(gun_text, (10, 100))
+    ammo_text = font.render(f"Ammo: {'∞' if infinite_ammo_active else f'{current_ammo}/{ammo[gun_type]}'}", True, WHITE)
+    screen.blit(ammo_text, (10, 130))
+    if reloading:
+        reload_text = font.render("Reloading...", True, RED)
+        screen.blit(reload_text, (10, 190))
+
+    # Display active power-ups
+    current_time = time.time()
+    powerup_icon_width = 80
+    powerup_icon_height = 64
+    powerup_y_pos = height - 100
+    total_icons = len([p for p, t in active_powerup_timers.items() if t > current_time])
+    total_width = total_icons * (powerup_icon_width + 10) - 10
+    start_x = (width // 2) - (total_width // 2)
+
+    for index, (powerup, end_time) in enumerate(active_powerup_timers.items()):
+        if end_time > current_time:
+            powerup_image = pygame.transform.scale(powerup_images[powerup], (powerup_icon_width, powerup_icon_height))
+            x_pos = start_x + index * (powerup_icon_width + 10)
+            screen.blit(powerup_image, (x_pos, powerup_y_pos))
+
+            # Draw the remaining timer below the image
+            timer_text = font.render(f"{int(end_time - current_time)}s", True, WHITE)
+            screen.blit(timer_text, (
+                x_pos + (powerup_icon_width // 2) - (timer_text.get_width() // 2),
+                powerup_y_pos + powerup_icon_height + 5))
+
+    # Display grenades count in HUD
+    grenade_count_text = font.render(f"Grenades: {grenade_ammo}", True, WHITE)
+    screen.blit(grenade_count_text, (10, 160))  # Adjust position below the pistol ammo
+
+
+def buy_gun(gun):
+    global gun_type, score
+    if score >= gun_price[gun] and gun_type != gun:
+        gun_type = gun
+        score -= gun_price[gun]
+    else:
+        gun_type = gun
+
+
+def buy_shield():
+    global shield, score
+    if score >= 125 and shield < 100:
+        shield += 50
+        score -= 125
+
+
+def buy_grenades():
+    global grenade_ammo, score
+    if score >= 50:
+        grenade_ammo += 1
+        score -= 50
+
+
+# Startup Screen
+def startup_screen():
+    screen.fill(BLACK)
+    title_font = pygame.font.Font("pixelfont.ttf", 50)
+    button_font = pygame.font.Font("pixelfont.ttf", 30)
+    title_text = title_font.render("Zombie Hunter", True, WHITE)
+    start_button = button_font.render("Start Game", True, WHITE)
+    quit_button = button_font.render("Quit Game", True, WHITE)
+    settings_button = button_font.render("Settings", True, WHITE)
+
+    screen.blit(title_text, (width // 2 - title_text.get_width() // 2, height // 2 - 100))
+    screen.blit(start_button, (width // 2 - start_button.get_width() // 2, height // 2))
+    screen.blit(quit_button, (width // 2 - quit_button.get_width() // 2, height // 2 + 50))
+    screen.blit(settings_button, (width // 2 - settings_button.get_width() // 2, height // 2 + 100))
+
+    pygame.display.flip()
+
+    while True:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                exit()
+            elif event.type == pygame.MOUSEBUTTONDOWN:
+                mouse_x, mouse_y = pygame.mouse.get_pos()
+                if width // 2 - start_button.get_width() // 2 <= mouse_x <= width // 2 + start_button.get_width() // 2 and height // 2 <= mouse_y <= height // 2 + start_button.get_height():
+                    return
+                elif width // 2 - quit_button.get_width() // 2 <= mouse_x <= width // 2 + quit_button.get_width() // 2 and height // 2 + 50 <= mouse_y <= height // 2 + 50 + quit_button.get_height():
+                    pygame.quit()
+                    exit()
+                elif width // 2 - settings_button.get_width() // 2 <= mouse_x <= width // 2 + settings_button.get_width() // 2 and height // 2 + 100 <= mouse_y <= height // 2 + 100 + settings_button.get_height():
+                    settings_menu()
+
+
+def settings_menu():
+    screen.fill(BLACK)
+    button_font = pygame.font.Font("pixelfont.ttf", 30)
+    fullscreen_button = button_font.render("Toggle Fullscreen", True, WHITE)
+    back_button = button_font.render("Back", True, WHITE)
+
+    screen.blit(fullscreen_button, (width // 2 - fullscreen_button.get_width() // 2, height // 2))
+    screen.blit(back_button, (width // 2 - back_button.get_width() // 2, height // 2 + 50))
+
+    pygame.display.flip()
+
+    while True:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                exit()
+            elif event.type == pygame.MOUSEBUTTONDOWN:
+                mouse_x, mouse_y = pygame.mouse.get_pos()
+                if width // 2 - fullscreen_button.get_width() // 2 <= mouse_x <= width // 2 + fullscreen_button.get_width() // 2 and height // 2 <= mouse_y <= height // 2 + fullscreen_button.get_height():
+                    pygame.display.toggle_fullscreen()
+                elif width // 2 - back_button.get_width() // 2 <= mouse_x <= width // 2 + back_button.get_width() // 2 and height // 2 + 50 <= mouse_y <= height // 2 + 50 + back_button.get_height():
+                    return
+
+
+# Game Loop
+running = True
+paused = False
+buy_menu_open = False
+camera_x, camera_y = 0, 0
+zombies = spawn_zombies(round_num)
+grenades = []  # List to store grenades
+grenade_ammo = 3  # Starting ammo for grenades
+
+# Show startup screen
+startup_screen()
+
+while running:
+    screen.fill(BLACK)
+    camera_x, camera_y = player_x - width // 2, player_y - height // 2
+    screen.blit(background_image, (-camera_x, -camera_y))
+
+    for event in pygame.event.get():
+        if event.type == pygame.QUIT:
+            running = False
+        elif event.type == pygame.MOUSEBUTTONDOWN:
+            if buy_menu_open:
+                handle_buy_click(event.pos)
+            elif gun_type in ["pistol", "shotgun", "uzi", "revolver", "p90"]:  # Single click for these guns
+                shoot_bullet(player_x, player_y, *pygame.mouse.get_pos())
+        elif event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_r:
+                reloading, reload_start_time = True, time.time()
+            elif event.key == pygame.K_g:  # Press 'G' to drop a grenade
+                if grenade_ammo > 0:  # Ensure the player has grenades
+                    grenades.append(Grenade(player_x, player_y))  # Drop a grenade at the player's position
+                    grenade_ammo -= 1  # Decrease the grenade count
+            elif event.key == pygame.K_ESCAPE:  # Press 'ESC' to pause/unpause the game
+                paused = not paused
+            elif event.key == pygame.K_f:  # Press 'F' to toggle fullscreen
+                pygame.display.toggle_fullscreen()
+            elif event.key == pygame.K_TAB:  # Press 'TAB' to open/close buy menu
+                buy_menu_open = not buy_menu_open
+                paused = buy_menu_open
+
+    if paused:
+        if buy_menu_open:
+            draw_buy_menu()
+        else:
+            overlay = pygame.Surface((width, height), pygame.SRCALPHA)
+            overlay.fill((0, 0, 0, 180))  # Semi-transparent overlay
+            screen.blit(overlay, (0, 0))
+            pause_text = font.render("Paused", True, WHITE)
+            screen.blit(pause_text, (width // 2 - pause_text.get_width() // 2, height // 2))
+            exit_text = font.render("Press ESC to Exit", True, WHITE)
+            screen.blit(exit_text, (width // 2 - exit_text.get_width() // 2, height // 2 + 50))
+            settings_button = font.render("Settings", True, WHITE)
+            screen.blit(settings_button, (width // 2 - settings_button.get_width() // 2, height // 2 + 100))
+            pygame.display.flip()
+
+            while paused:
+                for event in pygame.event.get():
+                    if event.type == pygame.QUIT:
+                        running = False
+                        paused = False
+                    elif event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+                        paused = False
+                    elif event.type == pygame.MOUSEBUTTONDOWN:
+                        mouse_x, mouse_y = pygame.mouse.get_pos()
+                        if width // 2 - settings_button.get_width() // 2 <= mouse_x <= width // 2 + settings_button.get_width() // 2 and height // 2 + 100 <= mouse_y <= height // 2 + 100 + settings_button.get_height():
+                            settings_menu()
+                            paused = False
+                if not running:
+                    break
+            continue
+
+    # Reloading logic inside the game loop
+    if reloading:
+        player_image = player_reload_image  # Show reload image while reloading
+        if time.time() - reload_start_time >= reload_time:
+            reloading = False  # Reset reloading state
+            current_ammo = ammo[gun_type]  # Reload ammo to full
+            player_image = player_gun_image  # Revert to the gun image after reloading
+
+    keys = pygame.key.get_pressed()
+    if keys[pygame.K_LSHIFT] and stamina > 0:  # Running logic
+        player_speed = 3.8
+        stamina -= 0.3  # Stamina drain
+    else:
+        player_speed = 1.9
+        stamina += 0.2  # Regain stamina when not running
+    stamina = max(0, min(stamina, max_stamina))  # Clamp stamina between 0 and max_stamina
+
+    player_x += (keys[pygame.K_d] - keys[pygame.K_a]) * player_speed
+    player_y += (keys[pygame.K_s] - keys[pygame.K_w]) * player_speed
+
+    if pygame.mouse.get_pressed()[0] and gun_type == "ak":  # Hold left mouse button to shoot with ak
+        shoot_bullet(player_x, player_y, *pygame.mouse.get_pos())
+
+    # Rotate player image to face the mouse
+    mouse_x, mouse_y = pygame.mouse.get_pos()
+    angle = math.atan2(mouse_y - height // 2, mouse_x - width // 2)
+    rotated_player = pygame.transform.rotate(player_image, -math.degrees(angle))
+
+    # Draw the rotated player image at the player's position
+    player_rect = rotated_player.get_rect(center=(player_x - camera_x, player_y - camera_y))
+    screen.blit(rotated_player, player_rect.topleft)
+
+    # Update and draw grenades
+    for grenade in grenades[:]:
+        grenade.update(zombies)
+        if grenade.exploded:
+            grenades.remove(grenade)  # Remove grenade after explosion
+        grenade.draw(camera_x, camera_y)
+    # Handle bullets, zombies, blood splatter, power-ups (existing logic)
+    for bullet in bullets[:]:
+        bullet.move()
+        bullet.draw(camera_x, camera_y)
+        for zombie in zombies[:]:
+            if math.hypot(zombie.x - bullet.x, zombie.y - bullet.y) < 30:
+                damage = 999 if insta_kill_active else weapon_damage[gun_type]
+                zombie.health -= damage
+                if zombie.health <= 0:
+                    spawn_powerup_at_zombie(zombie.x, zombie.y)
+                    for _ in range(10):  # Generate 10 blood splatter particles
+                        angle = random.uniform(0, 2 * math.pi)  # Random direction for each particle
+                        blood_splatter_particles.append(BloodSplatter(zombie.x, zombie.y, angle))
+                    zombies.remove(zombie)
+                    score += 10  # Add points for killing a zombie
+                bullets.remove(bullet)
+                break
+        if not (0 <= bullet.x <= map_width and 0 <= bullet.y <= map_height):
+            bullets.remove(bullet)
+
+    # Update and draw blood splatter particles
+    for particle in blood_splatter_particles[:]:
+        if particle.update():
+            blood_splatter_particles.remove(particle)
+        else:
+            particle.draw(camera_x, camera_y)
+
+    for zombie in zombies:
+        angle = zombie.move_towards_player(player_x, player_y)
+        zombie.draw(camera_x, camera_y, angle)
+        if math.hypot(zombie.x - player_x, zombie.y - player_y) < 30:
+            if shield > 0:
+                shield -= 1  # Reduce shield first
+            else:
+                health -= 1  # Only reduce player health if shield is depleted
+
+    # Handle power-ups and HUD (existing logic)
+    for powerup in active_powerups[:]:
+        powerup.draw(camera_x, camera_y)
+        if math.hypot(powerup.x - player_x, powerup.y - player_y) < 20:
+            active_powerup_timers[powerup.type] = time.time() + 24  # Set power-up timer for 24 seconds
+            active_powerups.remove(powerup)
+
+    apply_powerups()
+
+    # Handle Game Over
+    if health <= 0:
+        running = False
+        # Display "Game Over" message
+        screen.fill(BLACK)
+        game_over_text = font.render("Game Over", True, RED)
+        restart_text = font.render('Press "R" To Restart', True, WHITE)
+        screen.blit(game_over_text, (width // 2 - game_over_text.get_width() // 2, height // 2 - 50))
+        screen.blit(restart_text, (width // 2 - restart_text.get_width() // 2, height // 2 + 10))
+        pygame.display.flip()
+        while True:
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    pygame.quit()
+                    exit()
+                elif event.type == pygame.KEYDOWN and event.key == pygame.K_r:
+                    # Reset game variables
+                    player_x, player_y = 400, 300
+                    health, shield, score, round_num = 100, 0, 0, 1
+                    stamina = max_stamina  # Reset stamina
+                    zombies, bullets, active_powerups = [], [], []
+                    gun_type = "pistol"
+                    current_ammo = ammo[gun_type]
+                    zombies = spawn_zombies(round_num)
+                    running = True
+                    break
+            if running:
+                break
+
+    # Draw HUD
+    draw_hud()
+
+    # If no zombies remain, start next round
+    if not zombies:
+        round_num += 1
+        zombies = spawn_zombies(round_num)
+
+    pygame.display.flip()
+    clock.tick(60)
+
+pygame.quit()
+
